@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="STH Planner">
+  <meta name="theme-color" content="#2E3038">
+  <title>STH Weekly Planner</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+
+  <!-- Google Identity Services (OAuth) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    :root {
+      --charcoal: #2E3038;
+      --charcoal-mid: #3a3d47;
+      --bg: #1e2027;
+      --surface: #252830;
+      --border: #3a3d47;
+      --text: #e8e9ec;
+      --dim: #8a8d98;
+      --yellow: #F5C800;
+      --green: #4ade80;
+      --blue: #60a5fa;
+      --orange: #f97316;
+      --purple: #a78bfa;
+      --red: #f87171;
+      --font: 'Barlow', sans-serif;
+      --mono: 'DM Mono', monospace;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+    /* ── LAYOUT ── */
+    #app { height: 100%; display: flex; flex-direction: column; padding-top: var(--safe-top); padding-bottom: var(--safe-bottom); }
+
+    /* ── HEADER ── */
+    #header { background: var(--charcoal); border-bottom: 2px solid var(--yellow); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; flex-wrap: wrap; }
+    .logo { background: var(--yellow); color: var(--charcoal); font-weight: 800; font-size: 13px; padding: 3px 8px; letter-spacing: 0.06em; flex-shrink: 0; }
+    .app-title { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+    .spacer { flex: 1; }
+    .week-nav { display: flex; align-items: center; gap: 8px; }
+    #weekLabel { font-size: 13px; font-weight: 600; color: var(--yellow); font-family: var(--mono); min-width: 190px; text-align: center; white-space: nowrap; }
+    .icon-btn { background: var(--charcoal-mid); border: 1px solid var(--border); color: var(--text); width: 32px; height: 32px; font-size: 18px; display: flex; align-items: center; justify-content: center; cursor: pointer; border-radius: 2px; flex-shrink: 0; transition: background 0.15s; }
+    .icon-btn:hover { background: var(--yellow); color: var(--charcoal); }
+    .ghost-btn { background: transparent; border: 1px solid var(--border); color: var(--dim); font-family: var(--font); font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 2px; transition: all 0.15s; white-space: nowrap; }
+    .ghost-btn:hover { border-color: var(--text); color: var(--text); }
+    .add-btn { background: var(--yellow); color: var(--charcoal); border: none; font-family: var(--font); font-weight: 800; font-size: 13px; padding: 6px 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 2px; white-space: nowrap; }
+    .add-btn:hover { opacity: 0.88; }
+
+    /* ── GOOGLE AUTH BUTTON ── */
+    #gcalBtn { display: flex; align-items: center; gap: 7px; background: transparent; border: 1px solid var(--border); color: var(--dim); font-family: var(--font); font-size: 11px; font-weight: 700; padding: 5px 10px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 2px; transition: all 0.15s; white-space: nowrap; }
+    #gcalBtn:hover { border-color: var(--blue); color: var(--blue); }
+    #gcalBtn.connected { border-color: var(--green); color: var(--green); }
+    #gcalBtn.loading { opacity: 0.6; cursor: default; }
+    .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background 0.3s; }
+    .sync-dot.connected { background: var(--green); }
+    .sync-dot.loading { background: var(--yellow); animation: pulse 1s infinite; }
+    .sync-dot.error { background: var(--red); }
+
+    /* ── STATUS BAR ── */
+    #statusBar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 4px 16px; font-size: 11px; font-family: var(--mono); color: var(--dim); min-height: 26px; display: flex; align-items: center; flex-shrink: 0; }
+    #statusBar.ok { color: var(--green); }
+    #statusBar.err { color: var(--red); }
+    #statusBar.info { color: var(--blue); }
+
+    /* ── LEGEND ── */
+    #legend { background: var(--surface); border-bottom: 1px solid var(--border); padding: 5px 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; flex-shrink: 0; overflow-x: auto; }
+    .leg { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+    .leg-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── CALENDAR GRID ── */
+    #calWrap { flex: 1; overflow: auto; padding: 12px 16px; }
+    #calGrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; min-width: 560px; height: 100%; }
+
+    .day-col { background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; min-height: 200px; }
+    .day-col.today { border-color: var(--yellow); }
+    .day-head { padding: 6px 8px 4px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .day-name { font-size: 9px; font-weight: 700; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; }
+    .day-num { font-size: 18px; font-weight: 800; color: var(--text); line-height: 1.1; }
+    .day-col.today .day-num { color: var(--yellow); }
+    .day-events { flex: 1; padding: 4px; display: flex; flex-direction: column; gap: 3px; overflow: hidden; }
+    .day-add { padding: 3px; text-align: center; font-size: 10px; color: var(--border); cursor: pointer; margin-top: auto; flex-shrink: 0; }
+    .day-col:hover .day-add { color: var(--dim); }
+
+    /* ── EVENT CHIP ── */
+    .chip { border-left: 3px solid #888; background: rgba(255,255,255,0.04); padding: 4px 6px; cursor: pointer; position: relative; border-radius: 0 2px 2px 0; flex-shrink: 0; }
+    .chip:hover { background: rgba(255,255,255,0.09); }
+    .chip-title { font-size: 10px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px; }
+    .chip-sub { font-size: 9px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chip-gcal { font-size: 9px; color: var(--blue); font-family: var(--mono); }
+    .chip-del { position: absolute; top: 2px; right: 3px; font-size: 10px; color: var(--dim); display: none; line-height: 1; cursor: pointer; }
+    .chip:hover .chip-del { display: block; }
+    .chip-del:hover { color: var(--red); }
+
+    /* ── UPCOMING STRIP ── */
+    #strip { background: var(--surface); border-top: 1px solid var(--border); padding: 8px 16px; display: flex; gap: 10px; overflow-x: auto; align-items: center; flex-shrink: 0; }
+    .strip-lbl { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); white-space: nowrap; flex-shrink: 0; }
+    .strip-item { border-left: 3px solid #888; padding: 4px 9px; white-space: nowrap; flex-shrink: 0; background: var(--charcoal); border-radius: 0 2px 2px 0; cursor: pointer; }
+    .strip-title { font-size: 10px; font-weight: 700; color: var(--text); }
+    .strip-date { font-size: 9px; color: var(--dim); font-family: var(--mono); }
+    .strip-empty { font-size: 11px; color: var(--dim); font-style: italic; }
+
+    /* ── MODAL ── */
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
+    .overlay.open { display: flex; }
+    .modal { background: var(--charcoal); border: 1px solid var(--border); border-top: 3px solid var(--yellow); width: 100%; max-width: 420px; padding: 20px; display: flex; flex-direction: column; gap: 13px; max-height: 90vh; overflow-y: auto; border-radius: 2px; }
+    .modal-title { font-size: 15px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--yellow); }
+    .form-row { display: flex; flex-direction: column; gap: 4px; }
+    .form-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--dim); }
+    .form-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--font); font-size: 13px; padding: 8px 10px; outline: none; width: 100%; border-radius: 2px; -webkit-appearance: none; }
+    .form-input:focus { border-color: var(--yellow); }
+    textarea.form-input { resize: vertical; min-height: 54px; }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+    .type-btn { padding: 6px 4px; border: 1px solid var(--border); background: transparent; color: var(--dim); font-family: var(--font); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; border-radius: 2px; transition: all 0.12s; }
+    .type-btn.sel { border-color: var(--yellow); color: var(--yellow); background: rgba(245,200,0,0.08); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-cancel { background: transparent; border: 1px solid var(--border); color: var(--dim); font-family: var(--font); font-size: 12px; font-weight: 700; padding: 8px 14px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 2px; }
+    .btn-save { background: var(--yellow); border: none; color: var(--charcoal); font-family: var(--font); font-size: 12px; font-weight: 800; padding: 8px 18px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 2px; }
+    .btn-save:disabled { opacity: 0.4; cursor: default; }
+    .gcal-note { font-size: 11px; color: var(--blue); display: flex; align-items: center; gap: 6px; }
+
+    /* ── SETUP MODAL ── */
+    #setupModal .modal { border-top-color: var(--blue); max-width: 480px; }
+    .setup-step { background: var(--surface); border: 1px solid var(--border); padding: 12px; border-radius: 2px; display: flex; flex-direction: column; gap: 6px; }
+    .step-num { background: var(--yellow); color: var(--charcoal); font-weight: 800; font-size: 11px; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step-head { display: flex; align-items: center; gap: 8px; }
+    .step-title { font-size: 13px; font-weight: 700; color: var(--text); }
+    .step-body { font-size: 12px; color: var(--dim); line-height: 1.5; padding-left: 30px; }
+    .step-body a { color: var(--blue); }
+    .client-id-wrap { padding-left: 30px; }
+    .client-id-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 8px 10px; outline: none; width: 100%; border-radius: 2px; margin-top: 6px; }
+    .client-id-input:focus { border-color: var(--yellow); }
+    .btn-connect { background: var(--blue); color: #fff; border: none; font-family: var(--font); font-weight: 800; font-size: 13px; padding: 10px 20px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.05em; border-radius: 2px; width: 100%; margin-top: 4px; }
+    .btn-connect:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── ANIMATIONS ── */
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--border); border-top-color: var(--yellow); border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 6px; }
+
+    /* ── MOBILE TWEAKS ── */
+    @media (max-width: 600px) {
+      #header { padding: 8px 12px; gap: 8px; }
+      #weekLabel { min-width: 150px; font-size: 12px; }
+      .app-title { display: none; }
+      #calWrap { padding: 8px 10px; }
+      .day-num { font-size: 15px; }
+      .modal { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="logo">STH</div>
+    <div class="app-title">Weekly Planner</div>
+    <div class="spacer"></div>
+    <div class="week-nav">
+      <button class="icon-btn" id="prevBtn">&#8249;</button>
+      <div id="weekLabel">—</div>
+      <button class="icon-btn" id="nextBtn">&#8250;</button>
+      <button class="ghost-btn" id="todayBtn">Today</button>
+    </div>
+    <button id="gcalBtn"><span class="sync-dot" id="syncDot"></span><span id="gcalBtnLabel">Connect Google Cal</span></button>
+    <button class="add-btn" id="addBtn">+ Add</button>
+  </div>
+
+  <!-- STATUS -->
+  <div id="statusBar">Ready</div>
+
+  <!-- LEGEND -->
+  <div id="legend">
+    <div class="leg"><span class="leg-dot" style="background:#4ade80"></span>Site Visit</div>
+    <div class="leg"><span class="leg-dot" style="background:#60a5fa"></span>Meeting</div>
+    <div class="leg"><span class="leg-dot" style="background:#f97316"></span>Leave</div>
+    <div class="leg"><span class="leg-dot" style="background:#a78bfa"></span>Concrete/Spray</div>
+    <div class="leg"><span class="leg-dot" style="background:#F5C800"></span>Milestone</div>
+    <div class="leg"><span class="leg-dot" style="background:#60a5fa;opacity:0.4"></span>Google Cal</div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div id="calWrap"><div id="calGrid"></div></div>
+
+  <!-- UPCOMING -->
+  <div id="strip">
+    <div class="strip-lbl">Next 14 days ▸</div>
+    <div class="strip-empty" id="stripEmpty">No upcoming events</div>
+  </div>
+</div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="overlay" id="eventModal">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Add Event</div>
+    <div class="form-row">
+      <div class="form-label">Title / Job</div>
+      <input class="form-input" id="evTitle" type="text" placeholder="e.g. 44 Scott Grove – site visit">
+    </div>
+    <div class="row2">
+      <div class="form-row">
+        <div class="form-label">Date</div>
+        <input class="form-input" id="evDate" type="date">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Time (optional)</div>
+        <input class="form-input" id="evTime" type="time">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Type</div>
+      <div class="type-grid" id="typeGrid"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Notes / Location</div>
+      <textarea class="form-input" id="evNotes" placeholder="Address, contact, extra detail..."></textarea>
+    </div>
+    <div class="gcal-note" id="gcalNote" style="display:none">📅 Will also be saved to Google Calendar</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelEvt">Cancel</button>
+      <button class="btn-save" id="saveEvt">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- GOOGLE CALENDAR SETUP MODAL -->
+<div class="overlay" id="setupModal">
+  <div class="modal" style="border-top-color:#60a5fa;max-width:480px;">
+    <div class="modal-title" style="color:#60a5fa;">Connect Google Calendar</div>
+
+    <div class="setup-step">
+      <div class="step-head"><div class="step-num">1</div><div class="step-title">Create a Google Cloud project</div></div>
+      <div class="step-body">Go to <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a> → New Project → name it <strong>STH Planner</strong></div>
+    </div>
+
+    <div class="setup-step">
+      <div class="step-head"><div class="step-num">2</div><div class="step-title">Enable the Google Calendar API</div></div>
+      <div class="step-body">APIs &amp; Services → Enable APIs → search <strong>Google Calendar API</strong> → Enable</div>
+    </div>
+
+    <div class="setup-step">
+      <div class="step-head"><div class="step-num">3</div><div class="step-title">Create an OAuth Client ID</div></div>
+      <div class="step-body">APIs &amp; Services → Credentials → Create Credentials → OAuth Client ID → Web Application<br><br>
+      Under <strong>Authorised JavaScript origins</strong> add the URL where this app is hosted (e.g. <code>https://yourusername.github.io</code>)<br><br>
+      Copy the <strong>Client ID</strong> and paste it below:</div>
+      <div class="client-id-wrap">
+        <input class="client-id-input" id="clientIdInput" type="text" placeholder="123456789-abc...apps.googleusercontent.com">
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="step-head"><div class="step-num">4</div><div class="step-title">Configure OAuth consent screen</div></div>
+      <div class="step-body">APIs &amp; Services → OAuth consent screen → External → fill in app name → Add your Google account as a Test user → Save</div>
+    </div>
+
+    <button class="btn-connect" id="connectBtn" disabled>Connect &amp; Sign In to Google</button>
+    <button class="btn-cancel" id="cancelSetup" style="width:100%;text-align:center;">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG — paste your Google OAuth Client ID here
+// ═══════════════════════════════════════════════════════
+const CONFIG = {
+  CLIENT_ID: localStorage.getItem('sth_gcal_client_id') || 'YOUR_GOOGLE_CLIENT_ID_HERE',
+  SCOPES: 'https://www.googleapis.com/auth/calendar',
+  DISCOVERY: 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'
+};
+
+// ═══════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════
+const TYPES = [
+  { key:'visit',     label:'Site Visit',    color:'#4ade80' },
+  { key:'meeting',   label:'Meeting',        color:'#60a5fa' },
+  { key:'leave',     label:'Leave',          color:'#f97316' },
+  { key:'concrete',  label:'Concrete/Spray', color:'#a78bfa' },
+  { key:'milestone', label:'Milestone',      color:'#F5C800' },
+];
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+let weekOffset = 0;
+let localEvents = load('sth_local_v1') || seedEvents();
+let gcalEvents = [];
+let selectedType = 'visit';
+let editingId = null;
+let gcalReady = false;
+let tokenClient = null;
+let accessToken = null;
+
+function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch{ return null; } }
+function save(k,v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch{} }
+function saveLocal() { save('sth_local_v1', localEvents); }
+function isoDate(d) { return d.toISOString().slice(0,10); }
+function isToday(d) { return isoDate(d) === isoDate(new Date()); }
+function getType(k) { return TYPES.find(t=>t.key===k)||TYPES[0]; }
+
+function seedEvents() {
+  function dPlus(n){ const d=new Date(); d.setDate(d.getDate()+n); return isoDate(d); }
+  return [
+    {id:'s1',title:'35 Playne St – Site Visit',date:isoDate(new Date()),time:'08:00',notes:'Check rig setup with Edward',type:'visit'},
+    {id:'s2',title:'Cape Schanck – Concrete Spray',date:dPlus(2),time:'07:00',notes:'Heidelberg Materials booked',type:'concrete'},
+    {id:'s3',title:'Will – Annual Leave',date:dPlus(3),time:'',notes:'',type:'leave'},
+    {id:'s4',title:'Tom England – Commercial Review',date:dPlus(1),time:'10:00',notes:'',type:'meeting'},
+  ];
+}
+
+function getWeekDates(offset) {
+  const now = new Date(), dow = now.getDay();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - (dow===0?6:dow-1) + offset*7);
+  mon.setHours(0,0,0,0);
+  return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
+}
+
+function guessType(title='') {
+  const t=title.toLowerCase();
+  if(t.includes('leave')||t.includes('rdo')||t.includes('holiday')||t.includes('annual')) return 'leave';
+  if(t.includes('concrete')||t.includes('spray')||t.includes('shotcrete')) return 'concrete';
+  if(t.includes('site')||t.includes('visit')||t.includes('inspect')) return 'visit';
+  if(t.includes('milestone')||t.includes('completion')||t.includes('handover')) return 'milestone';
+  return 'meeting';
+}
+
+// ═══════════════════════════════════════════════════════
+//  STATUS & SYNC DOT
+// ═══════════════════════════════════════════════════════
+function setStatus(msg, cls='') {
+  const b = document.getElementById('statusBar');
+  b.textContent = msg; b.className = cls ? 'status-bar '+cls : '';
+  b.style.color = cls==='ok'?'var(--green)':cls==='err'?'var(--red)':cls==='info'?'var(--blue)':'var(--dim)';
+}
+function setSyncDot(state) {
+  const d = document.getElementById('syncDot');
+  d.className = 'sync-dot'+(state?' '+state:'');
+}
+function setGcalBtn(state, label) {
+  const btn = document.getElementById('gcalBtn');
+  btn.className = state==='connected' ? 'connected' : '';
+  document.getElementById('gcalBtnLabel').textContent = label;
+  setSyncDot(state);
+}
+
+// ═══════════════════════════════════════════════════════
+//  GOOGLE CALENDAR API
+// ═══════════════════════════════════════════════════════
+function initGoogleAuth() {
+  if (!CONFIG.CLIENT_ID || CONFIG.CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID_HERE') return;
+  if (!window.google) { setTimeout(initGoogleAuth, 500); return; }
+
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.CLIENT_ID,
+    scope: CONFIG.SCOPES,
+    callback: (resp) => {
+      if (resp.error) { setStatus('Google sign-in failed: '+resp.error, 'err'); setSyncDot('error'); return; }
+      accessToken = resp.access_token;
+      gcalReady = true;
+      setGcalBtn('connected', '📅 Synced');
+      setStatus('Google Calendar connected — syncing…', 'info');
+      syncGCal();
+    }
+  });
+}
+
+function signInGoogle() {
+  if (!tokenClient) { openSetupModal(); return; }
+  setSyncDot('loading');
+  setStatus('Signing in to Google…');
+  tokenClient.requestAccessToken({prompt: accessToken ? '' : 'consent'});
+}
+
+async function gcalFetch(url) {
+  const resp = await fetch(url, { headers: { Authorization: 'Bearer '+accessToken } });
+  if (resp.status === 401) { accessToken = null; gcalReady = false; setGcalBtn('error','Reconnect Google Cal'); throw new Error('Token expired — please reconnect'); }
+  return resp.json();
+}
+
+async function syncGCal() {
+  if (!gcalReady || !accessToken) { signInGoogle(); return; }
+  setSyncDot('loading');
+  setStatus('Fetching Google Calendar events…');
+  const dates = getWeekDates(weekOffset);
+  const tMin = dates[0].toISOString();
+  const tMaxD = new Date(dates[6]); tMaxD.setHours(23,59,59);
+  const tMax = tMaxD.toISOString();
+  try {
+    const data = await gcalFetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}&singleEvents=true&orderBy=startTime&maxResults=100`
+    );
+    gcalEvents = (data.items||[]).map(e => {
+      const isAllDay = !!e.start?.date;
+      const dateStr = isAllDay ? e.start.date : e.start.dateTime?.slice(0,10);
+      const timeStr = isAllDay ? '' : e.start.dateTime?.slice(11,16);
+      return { id:'gcal_'+e.id, title:e.summary||'(no title)', date:dateStr, time:timeStr||'', notes:e.description||e.location||'', source:'gcal', type:guessType(e.summary||'') };
+    }).filter(e=>e.date);
+    setGcalBtn('connected','📅 Synced');
+    setStatus(`Google Calendar synced — ${gcalEvents.length} event${gcalEvents.length!==1?'s':''} this week`, 'ok');
+    renderWeek();
+  } catch(err) {
+    setSyncDot('error');
+    setStatus('Sync error: '+err.message, 'err');
+  }
+}
+
+async function createGCalEvent(ev) {
+  if (!gcalReady || !accessToken) return;
+  const isAllDay = !ev.time;
+  const body = isAllDay
+    ? { summary:ev.title, description:ev.notes, start:{date:ev.date}, end:{date:ev.date} }
+    : { summary:ev.title, description:ev.notes, start:{dateTime:ev.date+'T'+ev.time+':00', timeZone:'Australia/Melbourne'}, end:{dateTime:ev.date+'T'+incHour(ev.time)+':00', timeZone:'Australia/Melbourne'} };
+  try {
+    const resp = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+      method:'POST', headers:{'Authorization':'Bearer '+accessToken,'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (resp.ok) { setStatus('Event added to Google Calendar ✓', 'ok'); setTimeout(syncGCal, 1500); }
+  } catch(err) { setStatus('Could not write to Google Calendar: '+err.message, 'err'); }
+}
+
+function incHour(t) {
+  const [h,m]=t.split(':').map(Number);
+  return String(Math.min(h+1,23)).padStart(2,'0')+':'+String(m).padStart(2,'0');
+}
+
+// ═══════════════════════════════════════════════════════
+//  SETUP MODAL
+// ═══════════════════════════════════════════════════════
+function openSetupModal() { document.getElementById('setupModal').classList.add('open'); }
+function closeSetupModal() { document.getElementById('setupModal').classList.remove('open'); }
+
+document.getElementById('clientIdInput').addEventListener('input', function() {
+  document.getElementById('connectBtn').disabled = this.value.trim().length < 10;
+});
+
+document.getElementById('connectBtn').addEventListener('click', function() {
+  const id = document.getElementById('clientIdInput').value.trim();
+  if (!id) return;
+  CONFIG.CLIENT_ID = id;
+  localStorage.setItem('sth_gcal_client_id', id);
+  closeSetupModal();
+  initGoogleAuth();
+  setTimeout(signInGoogle, 300);
+});
+
+document.getElementById('cancelSetup').addEventListener('click', closeSetupModal);
+
+// ═══════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════
+function renderWeek() {
+  const dates = getWeekDates(weekOffset);
+  const s=dates[0], e=dates[6];
+  document.getElementById('weekLabel').textContent =
+    s.getDate()+' '+MONTHS[s.getMonth()]+' – '+e.getDate()+' '+MONTHS[e.getMonth()]+' '+e.getFullYear();
+
+  const grid = document.getElementById('calGrid');
+  grid.innerHTML = '';
+
+  const all = [
+    ...localEvents.map(e=>({...e,_src:'local'})),
+    ...gcalEvents.map(e=>({...e,_src:'gcal',type:e.type||guessType(e.title)}))
+  ];
+
+  dates.forEach((d,i)=>{
+    const col = document.createElement('div');
+    col.className = 'day-col'+(isToday(d)?' today':'');
+
+    const head = document.createElement('div');
+    head.className = 'day-head';
+    head.innerHTML = `<div class="day-name">${DAYS[i]}</div><div class="day-num">${d.getDate()}</div>`;
+    col.appendChild(head);
+
+    const evWrap = document.createElement('div');
+    evWrap.className = 'day-events';
+
+    const dayEvs = all.filter(e=>e.date===isoDate(d)).sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    dayEvs.forEach(ev=>{
+      const t = getType(ev.type);
+      const bc = ev._src==='gcal'?'#60a5fa':t.color;
+      const chip = document.createElement('div');
+      chip.className = 'chip';
+      chip.style.borderLeftColor = bc;
+      const sub = ev.time?(ev.time+(ev.notes?'  ·  '+ev.notes.slice(0,14):'')):(ev.notes?ev.notes.slice(0,18):'');
+      chip.innerHTML =
+        `<div class="chip-title">${ev.title}</div>`+
+        (sub?`<div class="chip-sub">${sub}</div>`:'')+
+        (ev._src==='gcal'?`<div class="chip-gcal">📅 gcal</div>`:'')+
+        (ev._src==='local'?`<span class="chip-del" data-id="${ev.id}">✕</span>`:'');
+      chip.addEventListener('click', function(e){
+        if(e.target.dataset.id){ localEvents=localEvents.filter(x=>x.id!==e.target.dataset.id); saveLocal(); renderWeek(); renderStrip(all); return; }
+        if(ev._src==='local') openModal(ev.id);
+      });
+      evWrap.appendChild(chip);
+    });
+
+    const hint = document.createElement('div');
+    hint.className = 'day-add';
+    hint.textContent = '+ add';
+    hint.addEventListener('click',()=>openModal(null,isoDate(d)));
+    evWrap.appendChild(hint);
+
+    col.appendChild(evWrap);
+    grid.appendChild(col);
+  });
+
+  renderStrip(all);
+}
+
+function renderStrip(all) {
+  const strip = document.getElementById('strip');
+  strip.querySelectorAll('.strip-item').forEach(el=>el.remove());
+  const today=new Date(); today.setHours(0,0,0,0);
+  const lim=new Date(today); lim.setDate(today.getDate()+14);
+  const up=(all||[]).filter(e=>{ const d=new Date(e.date+'T00:00:00'); return d>=today&&d<=lim; })
+    .sort((a,b)=>a.date.localeCompare(b.date)||(a.time||'').localeCompare(b.time||''));
+  document.getElementById('stripEmpty').style.display=up.length?'none':'';
+  up.forEach(ev=>{
+    const t=getType(ev.type); const d=new Date(ev.date+'T00:00:00');
+    const el=document.createElement('div');
+    el.className='strip-item';
+    el.style.borderLeftColor=ev._src==='gcal'?'#60a5fa':t.color;
+    el.innerHTML=`<div class="strip-title">${ev.title}</div><div class="strip-date">${d.getDate()} ${MONTHS[d.getMonth()]}${ev.time?' '+ev.time:''}</div>`;
+    strip.appendChild(el);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  EVENT MODAL
+// ═══════════════════════════════════════════════════════
+function buildTypeGrid() {
+  const grid = document.getElementById('typeGrid');
+  grid.innerHTML='';
+  TYPES.forEach(t=>{
+    const btn=document.createElement('button');
+    btn.className='type-btn'+(selectedType===t.key?' sel':'');
+    btn.innerHTML=`<span style="width:6px;height:6px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span>${t.label}`;
+    btn.addEventListener('click',()=>{ selectedType=t.key; buildTypeGrid(); });
+    grid.appendChild(btn);
+  });
+}
+
+function openModal(id=null, dateStr=null) {
+  editingId=id;
+  const modal=document.getElementById('eventModal');
+  modal.classList.add('open');
+  if(id){
+    const ev=localEvents.find(e=>e.id===id);
+    document.getElementById('modalTitle').textContent='Edit Event';
+    document.getElementById('evTitle').value=ev.title;
+    document.getElementById('evDate').value=ev.date;
+    document.getElementById('evTime').value=ev.time||'';
+    document.getElementById('evNotes').value=ev.notes||'';
+    selectedType=ev.type;
+  } else {
+    document.getElementById('modalTitle').textContent='Add Event';
+    document.getElementById('evTitle').value='';
+    document.getElementById('evDate').value=dateStr||isoDate(new Date());
+    document.getElementById('evTime').value='';
+    document.getElementById('evNotes').value='';
+    selectedType='visit';
+  }
+  document.getElementById('gcalNote').style.display = (gcalReady&&!id)?'flex':'none';
+  buildTypeGrid();
+  setTimeout(()=>document.getElementById('evTitle').focus(),80);
+}
+
+function closeModal() { document.getElementById('eventModal').classList.remove('open'); editingId=null; }
+
+document.getElementById('saveEvt').addEventListener('click', async ()=>{
+  const title=document.getElementById('evTitle').value.trim();
+  const date=document.getElementById('evDate').value;
+  if(!title||!date) return;
+  const time=document.getElementById('evTime').value;
+  const notes=document.getElementById('evNotes').value.trim();
+  const ev={id:editingId||Date.now().toString(),title,date,time,notes,type:selectedType};
+  if(editingId){ localEvents=localEvents.map(e=>e.id===editingId?ev:e); }
+  else { localEvents.push(ev); if(gcalReady) createGCalEvent(ev); }
+  saveLocal(); renderWeek(); closeModal();
+});
+
+document.getElementById('cancelEvt').addEventListener('click',closeModal);
+document.getElementById('eventModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeModal(); });
+
+// ═══════════════════════════════════════════════════════
+//  NAV
+// ═══════════════════════════════════════════════════════
+document.getElementById('prevBtn').addEventListener('click',()=>{ weekOffset--; renderWeek(); if(gcalReady) syncGCal(); });
+document.getElementById('nextBtn').addEventListener('click',()=>{ weekOffset++; renderWeek(); if(gcalReady) syncGCal(); });
+document.getElementById('todayBtn').addEventListener('click',()=>{ weekOffset=0; renderWeek(); if(gcalReady) syncGCal(); });
+document.getElementById('addBtn').addEventListener('click',()=>openModal());
+document.getElementById('gcalBtn').addEventListener('click',()=>{ if(gcalReady){ syncGCal(); } else { openSetupModal(); } });
+
+// ═══════════════════════════════════════════════════════
+//  SERVICE WORKER (PWA)
+// ═══════════════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+initGoogleAuth();
+
+if (CONFIG.CLIENT_ID && CONFIG.CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+  setStatus('Google Client ID found — click "Connect Google Cal" to sign in', 'info');
+} else {
+  setStatus('Local mode — click "Connect Google Cal" to set up Google Calendar sync');
+}
+
+renderWeek();
+</script>
+</body>
+</html>
