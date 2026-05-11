@@ -393,20 +393,36 @@ async function gcalFetch(url) {
 async function syncGCal() {
   if (!gcalReady || !accessToken) { signInGoogle(); return; }
   setSyncDot('loading');
-  setStatus('Fetching Google Calendar events…');
+  setStatus('Fetching all calendars…');
   const dates = getWeekDates(weekOffset);
   const tMin = dates[0].toISOString();
   const tMaxD = new Date(dates[6]); tMaxD.setHours(23,59,59);
   const tMax = tMaxD.toISOString();
   try {
-    const data = await gcalFetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}&singleEvents=true&orderBy=startTime&maxResults=100`
-    );
-    gcalEvents = (data.items||[]).map(e => {
+    // First get all calendars
+    const calList = await gcalFetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=50');
+    const calendars = (calList.items||[]).filter(c => c.selected !== false);
+
+    // Fetch events from all calendars in parallel
+    const allItems = await Promise.all(calendars.map(async cal => {
+      try {
+        const data = await gcalFetch(
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal.id)}/events?timeMin=${encodeURIComponent(tMin)}&timeMax=${encodeURIComponent(tMax)}&singleEvents=true&orderBy=startTime&maxResults=100`
+        );
+        return (data.items||[]).map(e => ({...e, _calName: cal.summary, _calColor: cal.backgroundColor}));
+      } catch { return []; }
+    }));
+
+    const flat = allItems.flat();
+    // Deduplicate by event id
+    const seen = new Set();
+    gcalEvents = flat.filter(e => {
+      if(seen.has(e.id)) return false; seen.add(e.id); return true;
+    }).map(e => {
       const isAllDay = !!e.start?.date;
       const dateStr = isAllDay ? e.start.date : e.start.dateTime?.slice(0,10);
       const timeStr = isAllDay ? '' : e.start.dateTime?.slice(11,16);
-      return { id:'gcal_'+e.id, title:e.summary||'(no title)', date:dateStr, time:timeStr||'', notes:e.description||e.location||'', source:'gcal', type:guessType(e.summary||'') };
+      return { id:'gcal_'+e.id, title:e.summary||'(no title)', date:dateStr, time:timeStr||'', notes:e.description||e.location||'', source:'gcal', type:guessType(e.summary||''), calName:e._calName };
     }).filter(e=>e.date);
     setGcalBtn('connected','📅 Synced');
     setStatus(`Google Calendar synced — ${gcalEvents.length} event${gcalEvents.length!==1?'s':''} this week`, 'ok');
@@ -499,7 +515,7 @@ function renderWeek() {
       chip.innerHTML =
         `<div class="chip-title">${ev.title}</div>`+
         (sub?`<div class="chip-sub">${sub}</div>`:'')+
-        (ev._src==='gcal'?`<div class="chip-gcal">📅 gcal</div>`:'')+
+        (ev._src==='gcal'?`<div class="chip-gcal">📅 ${ev.calName||'gcal'}</div>`:'')+
         (ev._src==='local'?`<span class="chip-del" data-id="${ev.id}">✕</span>`:'');
       chip.addEventListener('click', function(e){
         if(e.target.dataset.id){ localEvents=localEvents.filter(x=>x.id!==e.target.dataset.id); saveLocal(); renderWeek(); renderStrip(all); return; }
